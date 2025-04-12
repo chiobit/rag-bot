@@ -1,10 +1,11 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
 
+import os
 import sys
 import traceback
+import logging
 from datetime import datetime
-import os
 
 from aiohttp import web
 from aiohttp.web import Request, Response, json_response
@@ -19,15 +20,25 @@ from botbuilder.schema import Activity, ActivityTypes
 from bot import MyBot
 from config import DefaultConfig
 
+# ✅ 設定 logging，會輸出到 stdout → Azure Log Stream 可看見
+logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 CONFIG = DefaultConfig()
 
-# Create adapter.
-SETTINGS = BotFrameworkAdapterSettings(CONFIG.APP_ID, CONFIG.APP_PASSWORD)
+# ✅ 可選：開發模式允許跳過認證（用於 Postman 測試）
+if os.environ.get("BOT_AUTH_DISABLED", "false").lower() == "true":
+    logger.warning("⚠️ BOT_AUTH_DISABLED 已啟用，將跳過驗證")
+    SETTINGS = BotFrameworkAdapterSettings("", "")
+else:
+    SETTINGS = BotFrameworkAdapterSettings(CONFIG.APP_ID, CONFIG.APP_PASSWORD)
+
 ADAPTER = BotFrameworkAdapter(SETTINGS)
+
 
 # Catch-all for errors.
 async def on_error(context: TurnContext, error: Exception):
-    print(f"\n❌ [on_turn_error] unhandled error: {error}", file=sys.stderr)
+    logger.error("❌ [on_turn_error] 發生未處理錯誤：%s", error)
     traceback.print_exc()
 
     await context.send_activity("The bot encountered an error or bug.")
@@ -52,34 +63,36 @@ BOT = MyBot()
 # Listen for incoming requests on /api/messages
 async def messages(req: Request) -> Response:
     try:
-        print("✅ 收到 /api/messages")
+        logger.info("📥 收到請求：%s %s", req.method, req.path)
 
-        if "application/json" in req.headers.get("Content-Type", ""):
-            body = await req.json()
-            print("📝 解析 JSON 成功")
-        else:
-            print("❌ Content-Type 錯誤")
-            return Response(status=415)
+        content_type = req.headers.get("Content-Type", "")
+        if "application/json" not in content_type:
+            logger.warning("❌ 錯誤的 Content-Type：%s", content_type)
+            return Response(status=415, text="Unsupported Media Type")
 
-        print("📦 請求內容：", body)
+        body = await req.json()
+        logger.info("📦 JSON 請求內容：%s", body)
 
         activity = Activity().deserialize(body)
-        print("✅ activity 轉換成功，type:", activity.type)
+        logger.info("✅ 成功解析 Activity，type: %s", activity.type)
 
         auth_header = req.headers.get("Authorization", "")
-        print("🔐 Authorization Header:", auth_header[:40] + "...")
+        if not auth_header:
+            logger.warning("⚠️ 未提供 Authorization header")
+        else:
+            logger.info("🔐 Authorization 開頭: %s...", auth_header[:40])
 
         response = await ADAPTER.process_activity(activity, auth_header, BOT.on_turn)
-        print("✅ 處理完成，response:", response)
+        logger.info("✅ Bot 處理完成")
 
         if response:
+            logger.info("📝 有回傳 Response，狀態碼：%s", response.status)
             return json_response(data=response.body, status=response.status)
 
         return Response(status=201)
 
     except Exception as e:
-        print("❌ 發生例外錯誤！")
-        print(f"[Exception] {e}", file=sys.stderr)
+        logger.exception("❌ 發生例外錯誤：%s", e)
         traceback.print_exc()
         return Response(text=f"500: Internal Server Error\n{e}", status=500)
 
@@ -90,8 +103,8 @@ APP.router.add_post("/api/messages", messages)
 if __name__ == "__main__":
     try:
         port = int(os.environ.get("PORT", CONFIG.PORT or 8000))
-        print(f"✅ App starting on http://0.0.0.0:{port}")
+        logger.info("🚀 App 啟動於 http://0.0.0.0:%s", port)
         web.run_app(APP, host="0.0.0.0", port=port)
     except Exception as error:
-        print("❌ 應用啟動時發生錯誤")
+        logger.exception("❌ 應用啟動失敗：%s", error)
         traceback.print_exc()
