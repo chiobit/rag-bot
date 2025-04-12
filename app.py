@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 CONFIG = DefaultConfig()
 
 # ✅ 自動切換驗證模式
-if os.environ.get("BOT_AUTH_DISABLED", "false").lower() == "true":
+if os.environ.get("BOT_AUTH_DISABLED", "true").lower() == "true":
     logger.warning("⚠️ BOT_AUTH_DISABLED 模式開啟，將略過驗證")
     SETTINGS = BotFrameworkAdapterSettings("", "")
 else:
