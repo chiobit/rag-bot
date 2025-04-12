@@ -7,6 +7,6 @@ import os
 class DefaultConfig:
     """ Bot Configuration """
 
-    PORT = int(os.environ.get("PORT", 8000))  # ✅ 用環境變數 PORT
+    PORT = int(os.environ.get("PORT", 8000))
     APP_ID = os.environ.get("MicrosoftAppId", "")
     APP_PASSWORD = os.environ.get("MicrosoftAppPassword", "")
