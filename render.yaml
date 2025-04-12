@@ -1,8 +1,8 @@
 services:
   - type: web
-    name: rag-echo-bot
+    name: rag-bot
     env: python
     plan: free
     buildCommand: ""
-    startCommand: uvicorn app:app --host 0.0.0.0 --port 10000
+    startCommand: python app.py
     autoDeploy: true
